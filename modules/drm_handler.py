@@ -339,7 +339,7 @@ async def drm_handler(bot: Client, m: Message):
 
             #elif "d1d34p8vz63oiq" in url or "sec1.pw.live" in url:
             elif "childId" in url and "parentId" in url:
-                url = f"https://anonymouspwplayer-0e5a3f512dec.herokuapp.com/pw?url={url}&token={pwtoken}"
+                url = f"https://anonymouspwplayer-554b25895c1a.herokuapp.com/pw?url={url}&token={pw_token}"
                                       
             elif 'encrypted.m' in url:
                 appxkey = url.split('*')[1]
