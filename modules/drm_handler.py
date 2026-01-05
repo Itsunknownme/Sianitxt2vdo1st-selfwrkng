@@ -46,6 +46,7 @@ from utils import progress_bar
 from vars import API_ID, API_HASH, BOT_TOKEN, OWNER, CREDIT, AUTH_USERS, TOTAL_USERS, cookies_file_path
 from vars import api_url, api_token
 
+
 # .....,.....,.......,...,.......,....., .....,.....,.......,...,.......,.....,
 
 
@@ -291,17 +292,65 @@ async def drm_handler(bot: Client, m: Message):
             if "acecwply" in url:
                 cmd = f'yt-dlp -o "{name}.%(ext)s" -f "bestvideo[height<={raw_text2}]+bestaudio" --hls-prefer-ffmpeg --no-keep-video --remux-video mkv --no-warning "{url}"'
          
-            elif "https://cpvod.testbook.com/" in url or "classplusapp.com/drm/" in url:
-                url = url.replace("https://cpvod.testbook.com/","https://media-cdn.classplusapp.com/drm/")
-                url = f"https://head-micheline-botupdatevip-f1804c58.koyeb.app/get_keys?url={url}@botupdatevip4u&user_id={user_id}"
-                result = helper.get_mps_and_keys2(url)
-                if result is None:
-                    await m.reply_text(f"❌ Token failed. Trying next one...")
-                    time.sleep(10)
-                    result = helper.get_mps_and_keys2(url)                
-                mpd, keys = result
-                url = mpd
-                keys_string = " ".join([f"--key {key}" for key in keys])
+            # --- Unified Classplus/Testbook handler using ITSGOLU API ---
+            if any(x in url for x in ["https://cpvod.testbook.com/", "classplusapp.com/drm/", "media-cdn.classplusapp.com", "media-cdn-alisg.classplusapp.com", "media-cdn-a.classplusapp.com", "tencdn.classplusapp", "videos.classplusapp", "webvideos.classplusapp.com"]):
+                # normalize cpvod -> media-cdn path used by API
+                url_norm = url.replace("https://cpvod.testbook.com/", "https://media-cdn.classplusapp.com/drm/")
+                api_url_call = f"https://covercel.vercel.app/extract_keys?url={url}@bots_updatee&user_id={user_id}"
+                keys_string = ""
+                mpd = None
+                try:
+                    resp = requests.get(api_url_call, timeout=30)
+                    data = resp.json()
+
+                    # DRM response (MPD + KEYS)
+                    if isinstance(data, dict) and "KEYS" in data and "MPD" in data:
+                        mpd = data.get("MPD")
+                        keys = data.get("KEYS", [])
+                        url = mpd
+                        keys_string = " ".join([f"--key {k}" for k in keys])
+                        print(f"✅ DRM Content - Got {len(keys)} keys")
+
+                    # Non-DRM response (direct url)
+                    elif isinstance(data, dict) and "url" in data:
+                        url = data.get("url")
+                        keys_string = ""
+                        print("✅ Non-DRM Content - Got direct URL")
+
+                    else:
+                        # Unexpected response format
+                        await m.reply_text("⚠️@Tamilan321x returned unexpected response, attempting fallback...")
+                        # Try helper fallback that used to work for drm-only endpoints
+                        try:
+                            res = helper.get_mps_and_keys2(url_norm)
+                            if res:
+                                mpd, keys = res
+                                url = mpd
+                                keys_string = " ".join([f"--key {k}" for k in keys])
+                                print("🔁 Fallback succeeded via helper.get_mps_and_keys2")
+                            else:
+                                print("⚠️ Fallback returned nothing. Using original URL")
+                                keys_string = ""
+                        except Exception as e_fallback:
+                            print(f"Fallback error: {e_fallback}")
+                            keys_string = ""
+
+                except Exception as e_api:
+                    # API failed — attempt helper fallback before giving up
+                    await m.reply_text(f"❌https://t.me/Tamilan321x API failed: {str(e_api)} — attempting fallback...")
+                    try:
+                        res = helper.get_mps_and_keys2(url_norm)
+                        if res:
+                            mpd, keys = res
+                            url = mpd
+                            keys_string = " ".join([f"--key {k}" for k in keys])
+                            print("🔁 Fallback succeeded via helper.get_mps_and_keys2")
+                        else:
+                            print("⚠️ Fallback returned nothing. Using original URL")
+                            keys_string = ""
+                    except Exception as e_fallback:
+                        print(f"Fallback error: {e_fallback}")
+                        keys_string = ""
 
             #elif "classplusapp" in url:
                 #signed_api = f"https://covercel.vercel.app/extract_keys?url={url}@bots_updatee&user_id={user_id}"
@@ -309,37 +358,35 @@ async def drm_handler(bot: Client, m: Message):
                 #url = response.text.strip()
                 #url = response.json()['url']  
                 
+            # legacy branches replaced by unified handler above
+            # keep some older checks for coverage
             elif 'videos.classplusapp' in url or "tencdn.classplusapp" in url or "webvideos.classplusapp.com" in url:
-                result = helper.get_mps_and_keys3(url)
-                if result is None:
-                    await m.reply_text(f"❌ Token failed. Trying next one...")
-                    time.sleep(10)
-                    result = helper.get_mps_and_keys3(url)
-                mpd = result    
-                mpd = helper.get_mps_and_keys3(url) 
-                url = mpd
+                # call unified API as well
+                try:
+                    url_norm = url
+                    api_url_call = f"https://covercel.vercel.app/extract_keys?url={url}@bots_updatee&user_id={user_id}"
+                    resp = requests.get(api_url_call, timeout=30)
+                    data = resp.json()
+                    if isinstance(data, dict) and "url" in data:
+                        url = data.get('url')
+                        keys_string = ""
+                    elif isinstance(data, dict) and "MPD" in data and "KEYS" in data:
+                        mpd = data.get('MPD')
+                        keys = data.get('KEYS', [])
+                        url = mpd
+                        keys_string = " ".join([f"--key {k}" for k in keys])
+                except Exception:
+                    # leave url as-is
+                    keys_string = ""
 
            
-            
-            elif 'media-cdn.classplusapp.com' in url or "media-cdn.classplusapp.com" in url and ("cc/" in url or "lc/" in url or "tencent/" in url or "drm/" in url) or'media-cdn-alisg.classplusapp.com' in url or 'media-cdn-a.classplusapp.com' in url : 
-                url = url.replace("https://cpvod.testbook.com/","https://media-cdn.classplusapp.com/drm/")
-                url = f"https://head-micheline-botupdatevip-f1804c58.koyeb.app"
-                result = helper.get_mps_and_keys2(url)
-                if result is None:
-                    await m.reply_text(f"❌ Token failed. Trying next one...")
-                    time.sleep(10)
-                    result = helper.get_mps_and_keys2(url)                
-                mpd, keys = result
-                url = mpd
-                keys_string = " ".join([f"--key {key}" for key in keys])
-
             if "edge.api.brightcove.com" in url:
                 bcov = f'bcov_auth={cwtoken}'
                 url = url.split("bcov_auth")[0]+bcov
 
             #elif "d1d34p8vz63oiq" in url or "sec1.pw.live" in url:
             elif "childId" in url and "parentId" in url:
-                url = f"https://anonymouspwplayer-554b25895c1a.herokuapp.com/pw?url={url}&token={pw_token}"
+                url = f"https://anonymouspwplayer-0e5a3f512dec.herokuapp.com/pw?url={url}&token={pwtoken}"
                                       
             elif 'encrypted.m' in url:
                 appxkey = url.split('*')[1]
@@ -357,7 +404,7 @@ async def drm_handler(bot: Client, m: Message):
             elif "webvideos.classplusapp." in url:
                cmd = f'yt-dlp --add-header "referer:https://web.classplusapp.com/" --add-header "x-cdn-tag:empty" -f "{ytf}" "{url}" -o "{name}.mp4"'
             elif "youtube.com" in url or "youtu.be" in url:
-                cmd = f'yt-dlp --cookies youtube_cookies.txt -f "{ytf}" "{url}" -o "{name}".mp4'
+                cmd = f'yt-dlp --cookies youtube_cookies.txt -f "{ytf}" "{url}" -o "{name}.mp4"'
             else:
                 cmd = f'yt-dlp -f "{ytf}" "{url}" -o "{name}.mp4"'
 #........................................................................................................................................................................................
@@ -424,7 +471,7 @@ async def drm_handler(bot: Client, m: Message):
                         f"╰━🖇️𝐑𝐞𝐦𝐚𝐢𝐧 » {remaining_links}\n" \
                         f"━━━━━━━━━━━━━━━━━━━━━━━━\n" \
                         f"<blockquote><b>⚡Dᴏᴡɴʟᴏᴀᴅɪɴɢ Sᴛᴀʀᴛᴇᴅ...⏳</b></blockquote>\n┃\n" \
-                        f'┣💃𝐂𝐫𝐞𝐝𝐢𝐭 » {CR}\n┃\n' \
+                        f"┣💃𝐂𝐫𝐞𝐝𝐢𝐭 » {CR}\n┃\n" \
                         f"╰━📚𝐁𝐚𝐭𝐜𝐡 » {b_name}\n" \
                         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n" \
                         f"<blockquote>📚𝐓𝐢𝐭𝐥𝐞 » {namef}</blockquote>\n┃\n" \
@@ -521,7 +568,7 @@ async def drm_handler(bot: Client, m: Message):
                         await m.reply_text(str(e))
                         time.sleep(e.x)
                         continue    
-                    
+                        
                 elif 'encrypted.m' in url:    
                     prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
                     prog1 = await m.reply_text(Show1, disable_web_page_preview=True)
@@ -537,6 +584,7 @@ async def drm_handler(bot: Client, m: Message):
                 elif 'drmcdni' in url or 'drm/wv' in url or 'drm/common' in url:
                     prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
                     prog1 = await m.reply_text(Show1, disable_web_page_preview=True)
+                    # mpd and keys_string should have been set by ITSGOLU handler above for DRM
                     res_file = await helper.decrypt_and_merge_video(mpd, keys_string, path, name, raw_text2)
                     filename = res_file
                     await prog1.delete(True)
@@ -545,7 +593,7 @@ async def drm_handler(bot: Client, m: Message):
                     count += 1
                     await asyncio.sleep(1)
                     continue
-     
+         
                 else:
                     prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
                     prog1 = await m.reply_text(Show1, disable_web_page_preview=True)
