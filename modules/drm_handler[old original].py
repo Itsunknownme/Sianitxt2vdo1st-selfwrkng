@@ -360,6 +360,14 @@ async def drm_handler(bot: Client, m: Message):
                 cmd = f'yt-dlp --cookies youtube_cookies.txt -f "{ytf}" "{url}" -o "{name}".mp4'
             else:
                 cmd = f'yt-dlp -f "{ytf}" "{url}" -o "{name}.mp4"'
+            if "jw-prod" in url:
+                cmd = f'yt-dlp -o "{name}.mp4" "{url}"'
+            elif "webvideos.classplusapp." in url:
+               cmd = f'yt-dlp --add-header "referer:https://web.classplusapp.com/" --add-header "x-cdn-tag:empty" -f "{ytf}" "{url}" -o "{name}.mp4"'
+            elif "youtube.com" in url or "youtu.be" in url:
+                cmd = f'yt-dlp --cookies youtube_cookies.txt -f "{ytf}" "{url}" -o "{name}".mp4'
+            else:
+                cmd = f'yt-dlp --referer "https://vigyanvariksh.classx.co.in/" -f "{ytf}" "{url}" -o "{name}.mp4"'    
 #........................................................................................................................................................................................
             try:
                 if m.text:
